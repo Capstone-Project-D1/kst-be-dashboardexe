@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  super_admin
+  manajemen
+  operator
+}
+
+enum KstIdentifier {
+  ngijo
+  cangar
+  jatikerto
+}
+
+enum UserStatus {
+  pending_approval
+  active
+  rejected
+  inactive
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+enum DataChangeMethod {
+  create
+  update
+  delete
+  patch
+}
+
+model User {
+  id                   String                @id @default(uuid()) @db.Uuid
+  username             String                @unique
+  email                String                @unique
+  passwordHash         String                @map("password_hash")
+  name                 String
+  pictureUri           String?               @map("picture_uri")
+  status               UserStatus            @default(pending_approval)
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  roles                UserRole[]
+  registrationRequests RegistrationRequest[] @relation("RegistrationUser")
+  reviewedRegistrations RegistrationRequest[] @relation("RegistrationReviewer")
+  refreshTokens        RefreshToken[]
+  dataChangeRequests   DataChangeRequest[]   @relation("DataChangeRequester")
+  reviewedDataChanges  DataChangeRequest[]   @relation("DataChangeReviewer")
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  role          Role
+  kstIdentifier KstIdentifier? @map("kst_identifier")
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([role])
+  @@index([kstIdentifier])
+  @@map("user_roles")
+}
+
+model RegistrationRequest {
+  id                     String          @id @default(uuid()) @db.Uuid
+  userId                 String          @map("user_id") @db.Uuid
+  requestedRole          Role            @map("requested_role")
+  requestedKstIdentifier KstIdentifier?  @map("requested_kst_identifier")
+  status                 ApprovalStatus  @default(pending)
+  reason                 String?
+  reviewedBy             String?         @map("reviewed_by") @db.Uuid
+  reviewedAt             DateTime?       @map("reviewed_at")
+  createdAt              DateTime        @default(now()) @map("created_at")
+  updatedAt              DateTime        @updatedAt @map("updated_at")
+  user                   User            @relation("RegistrationUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer               User?           @relation("RegistrationReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([status])
+  @@index([requestedKstIdentifier])
+  @@map("registration_requests")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model DataContract {
+  id            String        @id @default(uuid()) @db.Uuid
+  kstIdentifier KstIdentifier @map("kst_identifier")
+  version       String        @default("0.0.1")
+  contractJson  Json          @map("contract_json") @db.JsonB
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@unique([kstIdentifier, version])
+  @@map("data_contracts")
+}
+
+model DataEntry {
+  id            String        @id @default(uuid()) @db.Uuid
+  kstIdentifier KstIdentifier @map("kst_identifier")
+  path          String
+  code          String        @unique
+  name          String
+  description   String
+  dataType      Json          @map("data_type") @db.JsonB
+  operations    String[]
+  params        Json          @db.JsonB
+  data          Json          @db.JsonB
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  changes       DataChangeRequest[]
+
+  @@unique([kstIdentifier, path])
+  @@index([kstIdentifier])
+  @@map("data_entries")
+}
+
+model DataChangeRequest {
+  id            String           @id @default(uuid()) @db.Uuid
+  requestedBy   String           @map("requested_by") @db.Uuid
+  reviewedBy    String?          @map("reviewed_by") @db.Uuid
+  kstIdentifier KstIdentifier    @map("kst_identifier")
+  dataEntryId   String?          @map("data_entry_id") @db.Uuid
+  path          String
+  method        DataChangeMethod
+  oldValue      Json?            @map("old_value") @db.JsonB
+  newValue      Json             @map("new_value") @db.JsonB
+  status        ApprovalStatus   @default(pending)
+  reason        String?
+  reviewedAt    DateTime?        @map("reviewed_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  requester     User             @relation("DataChangeRequester", fields: [requestedBy], references: [id])
+  reviewer      User?            @relation("DataChangeReviewer", fields: [reviewedBy], references: [id])
+  dataEntry     DataEntry?       @relation(fields: [dataEntryId], references: [id])
+
+  @@index([status])
+  @@index([kstIdentifier])
+  @@index([requestedBy])
+  @@map("data_change_requests")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json     @db.JsonB
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+  actor      User?    @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
