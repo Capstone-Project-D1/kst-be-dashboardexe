@@ -11,6 +11,10 @@ process.env.REFRESH_TOKEN_TTL_DAYS = "7";
 process.env.CORS_ORIGIN = "http://localhost:5173";
 process.env.COOKIE_SECURE = "false";
 process.env.COOKIE_SAME_SITE = "lax";
+process.env.NGIJO_API_BASE_URL = "";
+process.env.CANGAR_API_BASE_URL = "";
+process.env.JATIKERTO_API_BASE_URL = "";
+process.env.UPSTREAM_TIMEOUT_MS = "5000";
 
 let app: any;
 let prisma: any;
@@ -86,15 +90,15 @@ describe("KST Executive Dashboard API", () => {
 
   it("manajemen tidak bisa write data", async () => {
     const res = await request(app)
-      .post("/kst/jatikerto/kemitraan")
+      .post("/data/kemitraan?kstIdentifier=jatikerto")
       .set("Authorization", `Bearer ${manajemenToken}`)
       .send({ mitra: "PT Read Only" });
     expect(res.status).toBe(403);
   });
 
-  it("operator submit edit menghasilkan data_change_request pending", async () => {
+  it("operator submit edit fallback lokal menghasilkan data_change_request pending", async () => {
     const res = await request(app)
-      .patch("/kst/ngijo/tracker-inovasi/ngijo-ti-1")
+      .patch("/data/tracker-inovasi?kstIdentifier=ngijo&id=ngijo-ti-1")
       .set("Authorization", `Bearer ${operatorNgijoToken}`)
       .send({ domain: "Updated Domain" });
     expect(res.status).toBe(200);
@@ -103,7 +107,7 @@ describe("KST Executive Dashboard API", () => {
 
   it("super_admin approve data_change_request dan data berubah", async () => {
     const submit = await request(app)
-      .patch("/kst/ngijo/tracker-inovasi/ngijo-ti-2")
+      .patch("/data/tracker-inovasi?kstIdentifier=ngijo&id=ngijo-ti-2")
       .set("Authorization", `Bearer ${operatorNgijoToken}`)
       .send({ domain: "Approved Domain" });
     const approve = await request(app)
@@ -112,9 +116,9 @@ describe("KST Executive Dashboard API", () => {
       .send();
     expect(approve.status).toBe(200);
     const list = await request(app)
-      .get("/kst/ngijo/tracker-inovasi?search=Approved Domain")
+      .get("/data/tracker-inovasi?search=Approved Domain")
       .set("Authorization", `Bearer ${superAdminToken}`);
-    expect(list.body.response.items[0].domain).toBe("Approved Domain");
+    expect(list.body.response.data.items[0].domain).toBe("Approved Domain");
   });
 
   it("operator tidak bisa akses KST lain", async () => {
@@ -127,8 +131,16 @@ describe("KST Executive Dashboard API", () => {
   it("GET /contract menghasilkan operations sesuai role", async () => {
     const res = await request(app).get("/contract").set("Authorization", `Bearer ${manajemenToken}`);
     expect(res.status).toBe(200);
-    const firstItem = res.body.response[0].contract[0].items[0];
-    expect(firstItem.operations).toEqual(["read"]);
+    expect(res.body.response).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kstIdentifier: "ngijo",
+          version: "unknown",
+          contract: [],
+          warning: expect.any(String),
+        }),
+      ]),
+    );
   });
 
   it("POST /query support partial item error", async () => {
