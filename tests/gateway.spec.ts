@@ -20,6 +20,7 @@ process.env.UPSTREAM_TIMEOUT_MS = "5000";
 let app: any;
 let fetchMock: ReturnType<typeof vi.fn>;
 let superAdminToken = "";
+let manajemenToken = "";
 let operatorNgijoToken = "";
 
 function jsonResponse(payload: unknown, status = 200) {
@@ -56,6 +57,18 @@ describe("KST gateway API", () => {
       },
       process.env.JWT_ACCESS_SECRET!,
     );
+    manajemenToken = jwt.sign(
+      {
+        sub: "manajemen",
+        username: "manajemen",
+        email: "manajemen@kst-ub.ac.id",
+        name: "Manajemen",
+        activeRole: "manajemen",
+        kstAccess: ["ngijo", "cangar", "jatikerto"],
+        permissions: ["read", "download_report"],
+      },
+      process.env.JWT_ACCESS_SECRET!,
+    );
   });
 
   beforeEach(() => {
@@ -69,11 +82,24 @@ describe("KST gateway API", () => {
       .set("Authorization", `Bearer ${superAdminToken}`);
 
     expect(res.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:5000/api/health", {
+    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:5000/api/health");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
       method: "GET",
-      headers: { Authorization: `Bearer ${superAdminToken}` },
+      headers: { Authorization: expect.stringMatching(/^Bearer /) },
       signal: expect.any(AbortSignal),
-    } as any);
+    });
+    const forwardedToken = String((fetchMock.mock.calls[0][1] as any).headers.Authorization).replace("Bearer ", "");
+    const forwardedPayload = jwt.verify(forwardedToken, process.env.JWT_ACCESS_SECRET!) as any;
+    expect(forwardedPayload.roles).toEqual({ kst_jatikerto: ["admin"] });
+  });
+
+  it("proxies GET /kst/jatikerto/health to the Jatikerto upstream health endpoint", async () => {
+    const res = await request(app)
+      .get("/kst/jatikerto/health")
+      .set("Authorization", `Bearer ${superAdminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:5000/api/health");
   });
 
   it("forwards contract query parameters", async () => {
@@ -84,6 +110,14 @@ describe("KST gateway API", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:5000/api/contract?permission=rw");
   });
 
+  it("proxies GET /kst/jatikerto/contract to the Jatikerto upstream contract endpoint", async () => {
+    await request(app)
+      .get("/kst/jatikerto/contract")
+      .set("Authorization", `Bearer ${superAdminToken}`);
+
+    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:5000/api/contract");
+  });
+
   it("forwards data path and query parameters", async () => {
     await request(app)
       .get("/api/gateway/jatikerto/data/pertanian/items?offset=0&limit=5")
@@ -91,6 +125,16 @@ describe("KST gateway API", () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe(
       "http://localhost:5000/api/data/pertanian/items?offset=0&limit=5",
+    );
+  });
+
+  it("proxies GET /kst/jatikerto/data/pertanian/items with pagination query", async () => {
+    await request(app)
+      .get("/kst/jatikerto/data/pertanian/items?offset=0&limit=10")
+      .set("Authorization", `Bearer ${superAdminToken}`);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "http://localhost:5000/api/data/pertanian/items?offset=0&limit=10",
     );
   });
 
@@ -106,14 +150,60 @@ describe("KST gateway API", () => {
     await request(app)
       .post("/api/gateway/jatikerto/query")
       .set("Authorization", `Bearer ${superAdminToken}`)
-      .send({ queries: [{ code: "pertanian.items" }] });
+      .send({ queries: [{ code: "1f0c9d2a-3b4c-6d7e-8f90-aaaaaaaaaa01" }] });
 
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:5000/api/query", {
       method: "POST",
-      headers: { Authorization: `Bearer ${superAdminToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ queries: [{ code: "pertanian.items" }] }),
+      headers: { Authorization: expect.stringMatching(/^Bearer /), "Content-Type": "application/json" },
+      body: JSON.stringify({ queries: [{ code: "1f0c9d2a-3b4c-6d7e-8f90-aaaaaaaaaa01" }] }),
       signal: expect.any(AbortSignal),
     } as any);
+  });
+
+  it("proxies POST /kst/jatikerto/query with Jatikerto data codes", async () => {
+    await request(app)
+      .post("/kst/jatikerto/query")
+      .set("Authorization", `Bearer ${superAdminToken}`)
+      .send({
+        queries: [
+          {
+            code: "1f0c9d2a-3b4c-6d7e-8f90-aaaaaaaaaa01",
+            params: { offset: 0, limit: 10 },
+          },
+        ],
+      });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:5000/api/query");
+    expect((fetchMock.mock.calls[0][1] as any).body).toBe(
+      JSON.stringify({
+        queries: [
+          {
+            code: "1f0c9d2a-3b4c-6d7e-8f90-aaaaaaaaaa01",
+            params: { offset: 0, limit: 10 },
+          },
+        ],
+      }),
+    );
+  });
+
+  it("returns 401 before proxying when the Core token is invalid", async () => {
+    const res = await request(app).get("/kst/jatikerto/health").set("Authorization", "Bearer invalid-token");
+
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns upstream 401 if Jatikerto rejects the rewritten token", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ timestamp: "kst", response: null, error: { code: 401, message: "Token invalid" } }, 401),
+    );
+
+    const res = await request(app)
+      .get("/kst/jatikerto/health")
+      .set("Authorization", `Bearer ${superAdminToken}`);
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.message).toBe("Token invalid");
   });
 
   it("returns 404 for unregistered KST services", async () => {
@@ -227,6 +317,16 @@ describe("KST gateway API", () => {
     const res = await request(app)
       .get("/kst/cangar/data/stok-opname")
       .set("Authorization", `Bearer ${operatorNgijoToken}`);
+
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 before proxying when the Core role is not allowed to write upstream data", async () => {
+    const res = await request(app)
+      .post("/kst/jatikerto/data/pertanian/items")
+      .set("Authorization", `Bearer ${manajemenToken}`)
+      .send({ typeName: "table", newValue: [] });
 
     expect(res.status).toBe(403);
     expect(fetchMock).not.toHaveBeenCalled();

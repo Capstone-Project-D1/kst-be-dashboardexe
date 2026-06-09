@@ -1,11 +1,12 @@
 import type { KstIdentifier } from "@prisma/client";
 import type { Request } from "express";
+import jwt from "jsonwebtoken";
 import { logger } from "../../config/logger.js";
 import type { AuthUser } from "../../types/domain.js";
 import { canAccessKst } from "../../utils/rbac.js";
 import { AppError } from "../../utils/response.js";
 import { GatewayError, requestUpstream, type GatewayResult } from "./gateway.client.js";
-import { KST_IDENTIFIERS } from "./upstream.config.js";
+import { getUpstreamConfig, KST_IDENTIFIERS } from "./upstream.config.js";
 
 type ContractResponse = {
   kstIdentifier: KstIdentifier;
@@ -33,9 +34,45 @@ function queryString(req: Request) {
   return index >= 0 ? req.originalUrl.slice(index) : "";
 }
 
-function forwardHeaders(req: Request) {
-  const headers: Record<string, string> = {};
+type GatewayAuthUser = AuthUser & {
+  iat?: number;
+  exp?: number;
+};
+
+function upstreamRoleForUser(user: AuthUser, kstIdentifier: KstIdentifier) {
+  if (!canAccessKst(user, kstIdentifier)) return null;
+  if (user.activeRole === "manajemen") return "viewer";
+  return "admin";
+}
+
+function upstreamAuthorization(req: Request, kstIdentifier: KstIdentifier) {
   const authorization = req.header("authorization");
+  const upstream = getUpstreamConfig(kstIdentifier);
+  if (!authorization || !upstream.rewriteAuthorization) return authorization;
+
+  const user = req.user as GatewayAuthUser;
+  const upstreamRole = upstreamRoleForUser(user, kstIdentifier);
+  if (!upstreamRole) return authorization;
+
+  const payload: Record<string, unknown> = {
+    sub: user.sub,
+    userid: user.sub,
+    username: user.username,
+    email: user.email,
+    name: user.name,
+    roles: { [upstream.upstreamIdentifier]: [upstreamRole] },
+    pictureUri: user.pictureUri ?? null,
+  };
+
+  if (user.iat) payload.iat = user.iat;
+  if (user.exp) payload.exp = user.exp;
+
+  return `Bearer ${jwt.sign(payload, upstream.jwtSecret!)}`;
+}
+
+function forwardHeaders(req: Request, kstIdentifier: KstIdentifier) {
+  const headers: Record<string, string> = {};
+  const authorization = upstreamAuthorization(req, kstIdentifier);
   const contentType = req.header("content-type");
 
   if (authorization) headers.Authorization = authorization;
@@ -68,7 +105,7 @@ export async function proxyGatewayRequest(
     method,
     path,
     queryString: queryString(req),
-    headers: forwardHeaders(req),
+    headers: forwardHeaders(req, kstIdentifier),
     body: req.body,
   });
 }
@@ -125,7 +162,7 @@ export async function aggregateContracts(req: Request, queryStringOverride?: str
           method: "GET",
           path: "/contract",
           queryString: queryStringOverride ?? queryString(req),
-          headers: forwardHeaders(req),
+          headers: forwardHeaders(req, kstIdentifier),
         });
         return contractPayload(kstIdentifier, result.payload, req.user!.activeRole);
       } catch (error) {
@@ -149,7 +186,7 @@ async function fetchDashboardSource(req: Request, kstIdentifier: KstIdentifier, 
       method: "GET",
       path,
       queryString: queryString(req),
-      headers: forwardHeaders(req),
+      headers: forwardHeaders(req, kstIdentifier),
     });
     return { kstIdentifier, data: result.response } satisfies DashboardSource;
   } catch (error) {
