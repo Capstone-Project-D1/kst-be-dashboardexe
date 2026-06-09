@@ -9,6 +9,8 @@ export type UpstreamConfig = {
   envName: "NGIJO_API_BASE_URL" | "CANGAR_API_BASE_URL" | "JATIKERTO_API_BASE_URL";
   baseUrl: string | null;
   jwtSecret?: string;
+  jwtIssuer?: string;
+  jwtAudience?: string;
   rewriteAuthorization?: boolean;
 };
 
@@ -33,6 +35,8 @@ export const upstreamServices: Record<KstIdentifier, UpstreamConfig> = {
     envName: "JATIKERTO_API_BASE_URL",
     baseUrl: env.JATIKERTO_API_BASE_URL || null,
     jwtSecret: env.JATIKERTO_JWT_SECRET || env.JWT_ACCESS_SECRET,
+    jwtIssuer: "stp-ub-system",
+    jwtAudience: "kst-dashboard",
     rewriteAuthorization: true,
   },
 };

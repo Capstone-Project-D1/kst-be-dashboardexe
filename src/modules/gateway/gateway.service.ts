@@ -67,7 +67,10 @@ function upstreamAuthorization(req: Request, kstIdentifier: KstIdentifier) {
   if (user.iat) payload.iat = user.iat;
   if (user.exp) payload.exp = user.exp;
 
-  return `Bearer ${jwt.sign(payload, upstream.jwtSecret!)}`;
+  return `Bearer ${jwt.sign(payload, upstream.jwtSecret!, {
+    ...(upstream.jwtIssuer ? { issuer: upstream.jwtIssuer } : {}),
+    ...(upstream.jwtAudience ? { audience: upstream.jwtAudience } : {}),
+  })}`;
 }
 
 function forwardHeaders(req: Request, kstIdentifier: KstIdentifier) {
