@@ -14,6 +14,11 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   COOKIE_SECURE: z.coerce.boolean().default(false),
   COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
+  NGIJO_API_BASE_URL: z.string().default(""),
+  CANGAR_API_BASE_URL: z.string().default(""),
+  JATIKERTO_API_BASE_URL: z.string().default(""),
+  JATIKERTO_JWT_SECRET: z.string().optional(),
+  UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 });
 
 export const env = envSchema.parse(process.env);

@@ -11,7 +11,8 @@ import approvalsRoutes from "./modules/approvals/approvals.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import contractsRoutes from "./modules/contracts/contracts.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
-import dataRoutes, { mountCompatibilityRoutes } from "./modules/data/data.routes.js";
+import dataRoutes from "./modules/data/data.routes.js";
+import gatewayRoutes, { kstGatewayRoutes } from "./modules/gateway/gateway.routes.js";
 import healthRoutes from "./modules/health/health.routes.js";
 import reportsRoutes from "./modules/reports/reports.routes.js";
 import usersRoutes from "./modules/users/users.routes.js";
@@ -30,6 +31,8 @@ export function createApp() {
   app.use((pinoHttp as any)({ logger }));
 
   app.use("/health", healthRoutes);
+  app.use("/api", gatewayRoutes);
+  app.use(kstGatewayRoutes);
   app.use("/auth", authRoutes);
   app.use("/users", usersRoutes);
   app.use("/approvals", approvalsRoutes);
@@ -37,7 +40,6 @@ export function createApp() {
   app.use("/dashboard", dashboardRoutes);
   app.use("/reports", reportsRoutes);
   app.use(dataRoutes);
-  mountCompatibilityRoutes(app);
 
   app.use(errorMiddleware);
 
