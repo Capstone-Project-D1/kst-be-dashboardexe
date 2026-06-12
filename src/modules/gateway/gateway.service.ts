@@ -5,6 +5,7 @@ import { logger } from "../../config/logger.js";
 import type { AuthUser } from "../../types/domain.js";
 import { canAccessKst } from "../../utils/rbac.js";
 import { AppError } from "../../utils/response.js";
+import { getExecutiveDashboardSummary } from "../cangar/cangarWp.service.js";
 import { GatewayError, requestUpstream, type GatewayResult } from "./gateway.client.js";
 import { getUpstreamConfig, KST_IDENTIFIERS } from "./upstream.config.js";
 
@@ -183,6 +184,20 @@ export async function aggregateContracts(req: Request, queryStringOverride?: str
 }
 
 async function fetchDashboardSource(req: Request, kstIdentifier: KstIdentifier, path: string) {
+  if (kstIdentifier === "cangar" && path === "/dashboard/summary") {
+    try {
+      const data = await getExecutiveDashboardSummary(req.query);
+      return { kstIdentifier, data } satisfies DashboardSource;
+    } catch (error) {
+      logger.warn({ error, kstIdentifier, path }, "Cangar WordPress dashboard summary fetch failed");
+      return {
+        kstIdentifier,
+        data: null,
+        warning: "Dashboard KST cangar dari WordPress belum tersedia.",
+      } satisfies DashboardSource;
+    }
+  }
+
   try {
     const result = await requestUpstream({
       kstIdentifier,

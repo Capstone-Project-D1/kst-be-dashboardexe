@@ -9,6 +9,8 @@ import { errorMiddleware } from "./middlewares/error.middleware.js";
 import { globalRateLimit } from "./middlewares/rateLimit.middleware.js";
 import approvalsRoutes from "./modules/approvals/approvals.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
+import cangarCompatRoutes from "./modules/cangar/cangar.compat.routes.js";
+import cangarRoutes from "./modules/cangar/cangar.routes.js";
 import contractsRoutes from "./modules/contracts/contracts.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import dataRoutes from "./modules/data/data.routes.js";
@@ -31,7 +33,9 @@ export function createApp() {
   app.use((pinoHttp as any)({ logger }));
 
   app.use("/health", healthRoutes);
+  app.use("/api/kst/cangar", cangarRoutes);
   app.use("/api", gatewayRoutes);
+  app.use("/kst/cangar", cangarCompatRoutes);
   app.use(kstGatewayRoutes);
   app.use("/auth", authRoutes);
   app.use("/users", usersRoutes);

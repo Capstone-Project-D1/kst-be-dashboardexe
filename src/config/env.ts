@@ -16,6 +16,8 @@ const envSchema = z.object({
   COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   NGIJO_API_BASE_URL: z.string().default(""),
   CANGAR_API_BASE_URL: z.string().default(""),
+  CANGAR_API_USERNAME: z.string().default(""),
+  CANGAR_API_PASSWORD: z.string().default(""),
   JATIKERTO_API_BASE_URL: z.string().default(""),
   JATIKERTO_JWT_SECRET: z.string().optional(),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
