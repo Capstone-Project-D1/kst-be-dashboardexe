@@ -107,6 +107,69 @@ function sumItemNumbers(items: unknown[], keys: string[], paths: string[][] = []
   return items.reduce<number>((total, item) => total + (firstNumber(item, keys, paths) ?? 0), 0);
 }
 
+function colValue(record: unknown, index: number) {
+  const values = directValue(record, ["colValues", "col_values", "columns"]);
+  if (!Array.isArray(values)) return undefined;
+
+  const byIndex = values.find((item) => isRecord(item) && firstNumber(item, ["colIdx", "col_idx", "index"]) === index);
+  if (isRecord(byIndex)) return directValue(byIndex, ["value"]);
+
+  return values[index];
+}
+
+function bookingNoteValue(item: unknown) {
+  return directValue(item, [
+    "catatan",
+    "notes",
+    "note",
+    "keterangan",
+    "description",
+    "remarks",
+    "booking_note",
+    "bookingNote",
+    "customer_note",
+    "customerNote",
+  ]) ?? colValue(item, 6);
+}
+
+function withBookingNotes(payload: unknown) {
+  if (!isRecord(payload)) return payload;
+
+  const data = directValue(payload, ["data"]);
+  if (isRecord(data)) {
+    const items = directValue(data, ["items"]);
+    if (Array.isArray(items)) {
+      return {
+        ...payload,
+        data: {
+          ...data,
+          items: items.map((item) => {
+            const note = bookingNoteValue(item);
+            return note === undefined || note === null || note === "" || !isRecord(item)
+              ? item
+              : { ...item, catatan: String(note) };
+          }),
+        },
+      };
+    }
+  }
+
+  const items = directValue(payload, ["items"]);
+  if (Array.isArray(items)) {
+    return {
+      ...payload,
+      items: items.map((item) => {
+        const note = bookingNoteValue(item);
+        return note === undefined || note === null || note === "" || !isRecord(item)
+          ? item
+          : { ...item, catatan: String(note) };
+      }),
+    };
+  }
+
+  return payload;
+}
+
 function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
@@ -193,7 +256,7 @@ export async function getBooking(query: Request["query"]) {
   const result = await requestCangar("/data/booking", {
     queryString: queryStringFromObject(query),
   });
-  return result.response;
+  return withBookingNotes(result.response);
 }
 
 export async function getBookingById(id: string) {
