@@ -16,6 +16,10 @@ const querySchema = z.object({
 });
 
 router.use(authMiddleware);
+router.use((_req, res, next) => {
+  res.setHeader("X-KST-Data-Source", "local-prisma");
+  next();
+});
 
 router.post(
   "/query",

@@ -32,6 +32,25 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function currentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+}
+
+function currentIsoWeek() {
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${pad2(week)}`;
+}
+
 describe("Cangar WordPress gateway", () => {
   beforeAll(async () => {
     ({ app } = await import("../src/app.js"));
@@ -138,6 +157,8 @@ describe("Cangar WordPress gateway", () => {
   });
 
   it("injects Cangar WordPress data into GET /dashboard/summary", async () => {
+    const week = currentIsoWeek();
+    const month = currentMonth();
     fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith("/auth/login"))
         return jsonResponse({ response: { accessToken: "wp-token" } });
@@ -151,7 +172,7 @@ describe("Cangar WordPress gateway", () => {
           },
         });
       }
-      if (url.endsWith("/data/stok?week=2026-W20")) {
+      if (url.endsWith(`/data/stok?week=${week}`)) {
         return jsonResponse({ response: { stok_keluar: 4, items: [{ total_keluar: 4 }] } });
       }
       if (url.endsWith("/data/booking")) {
@@ -161,7 +182,7 @@ describe("Cangar WordPress gateway", () => {
           },
         });
       }
-      if (url.endsWith("/data/keuangan/rekap?month=2026-05")) {
+      if (url.endsWith(`/data/keuangan/rekap?month=${month}`)) {
         return jsonResponse({ response: { total_income: 250000 } });
       }
       return jsonResponse({ error: { message: "Unexpected URL" } }, 500);
@@ -183,24 +204,24 @@ describe("Cangar WordPress gateway", () => {
       activeOperations: 5,
       greenPerformance: 88,
     });
-    expect(res.body.response.sources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kstIdentifier: "cangar",
-          data: expect.objectContaining({
-            totalVisitors: 7,
-            activeOperations: 5,
-          }),
-        }),
-      ]),
-    );
+    expect(res.body.response.sources.cangar).toEqual({
+      status: "success",
+      data: expect.objectContaining({
+        totalVisitors: 7,
+        activeOperations: 5,
+      }),
+    });
+    expect(res.body.response.sources.ngijo).toEqual({
+      status: "unavailable",
+      message: "Belum terintegrasi",
+    });
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(
       expect.arrayContaining([
         "http://localhost/kstcangar/wordpress/wp-json/kstcangar/v1/auth/login",
         "http://localhost/kstcangar/wordpress/wp-json/kstcangar/v1/data/summary",
-        "http://localhost/kstcangar/wordpress/wp-json/kstcangar/v1/data/stok?week=2026-W20",
+        `http://localhost/kstcangar/wordpress/wp-json/kstcangar/v1/data/stok?week=${week}`,
         "http://localhost/kstcangar/wordpress/wp-json/kstcangar/v1/data/booking",
-        "http://localhost/kstcangar/wordpress/wp-json/kstcangar/v1/data/keuangan/rekap?month=2026-05",
+        `http://localhost/kstcangar/wordpress/wp-json/kstcangar/v1/data/keuangan/rekap?month=${month}`,
       ]),
     );
   });
@@ -215,24 +236,23 @@ describe("Cangar WordPress gateway", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.response).toMatchObject({
-      totalVisitors: 0,
-      todayVisitors: 0,
-      weekVisitors: 0,
+      totalVisitors: null,
+      todayVisitors: null,
+      weekVisitors: null,
       activeKst: 0,
       totalKst: 3,
-      totalProduction: 0,
-      activeOperations: 0,
-      greenPerformance: 0,
+      totalProduction: null,
+      activeOperations: null,
+      greenPerformance: null,
     });
-    expect(res.body.response.sources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kstIdentifier: "cangar",
-          data: null,
-          warning: "Dashboard KST cangar dari WordPress belum tersedia.",
-        }),
-      ]),
-    );
+    expect(res.body.response.sources.cangar).toEqual({
+      status: "error",
+      message: "Dashboard KST cangar dari WordPress belum tersedia.",
+    });
+    expect(res.body.response.sources.ngijo).toEqual({
+      status: "unavailable",
+      message: "Belum terintegrasi",
+    });
   });
 
   it("maps legacy stok opname endpoints to frontend-compatible shapes", async () => {

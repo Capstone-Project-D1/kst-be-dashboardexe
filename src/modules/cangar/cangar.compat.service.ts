@@ -102,6 +102,25 @@ function queryStringValue(value: Request["query"][string]) {
   return undefined;
 }
 
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function currentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+}
+
+function currentIsoWeek() {
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${pad2(week)}`;
+}
+
 function monthQuery(query: Request["query"]) {
   const year = queryStringValue(query.year) ?? "2026";
   const rawMonth = queryStringValue(query.month);
@@ -119,7 +138,7 @@ function limitItems<T>(items: T[], query: Request["query"]) {
 
 function stokQuery(query: Request["query"]) {
   return {
-    week: queryStringValue(query.week) ?? "2026-W20",
+    week: queryStringValue(query.week) ?? currentIsoWeek(),
   };
 }
 
@@ -134,7 +153,7 @@ function bookingQuery(query: Request["query"]) {
 
 function keuanganRekapQuery(query: Request["query"]) {
   return {
-    month: monthQuery(query) ?? "2026-05",
+    month: monthQuery(query) ?? currentMonth(),
   };
 }
 

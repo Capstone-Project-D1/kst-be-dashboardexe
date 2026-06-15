@@ -19,6 +19,11 @@ import { CangarWpError } from "./cangarWp.client.js";
 
 const router = Router();
 
+router.use((_req, res, next) => {
+  res.setHeader("X-KST-Data-Source", "cangar-wp");
+  next();
+});
+
 function routeParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
@@ -151,5 +156,9 @@ router.get(
     }
   }),
 );
+
+router.use((req, res) => {
+  return fail(res, 404, `Endpoint Cangar ${req.method} ${req.originalUrl} tidak tersedia di adapter Cangar.`);
+});
 
 export default router;

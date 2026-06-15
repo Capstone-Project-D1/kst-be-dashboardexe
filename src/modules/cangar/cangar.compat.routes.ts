@@ -14,6 +14,11 @@ import {
 
 const router = Router();
 
+router.use((_req, res, next) => {
+  res.setHeader("X-KST-Data-Source", "cangar-wp");
+  next();
+});
+
 function sendCompatError(res: Parameters<typeof fail>[0], error: unknown) {
   if (error instanceof CangarWpError) return fail(res, error.code, error.message);
   if (error instanceof AppError) return fail(res, error.code, error.message);

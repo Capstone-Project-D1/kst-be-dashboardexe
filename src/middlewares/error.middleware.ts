@@ -1,8 +1,12 @@
-import type { ErrorRequestHandler } from "express";
+import type { ErrorRequestHandler, RequestHandler } from "express";
 import { Prisma } from "@prisma/client";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { AppError, fail } from "../utils/response.js";
+
+export const notFoundMiddleware: RequestHandler = (req, res) => {
+  return fail(res, 404, `Route ${req.method} ${req.originalUrl} tidak ditemukan.`);
+};
 
 export const errorMiddleware: ErrorRequestHandler = (error, req, res, _next) => {
   if (error instanceof AppError) {

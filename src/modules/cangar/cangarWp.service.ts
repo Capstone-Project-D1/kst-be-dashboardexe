@@ -107,7 +107,40 @@ function sumItemNumbers(items: unknown[], keys: string[], paths: string[][] = []
   return items.reduce<number>((total, item) => total + (firstNumber(item, keys, paths) ?? 0), 0);
 }
 
-function queryStringFromObject(query: Request["query"], defaults?: Record<string, string>) {
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function currentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+}
+
+function currentIsoWeek() {
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${pad2(week)}`;
+}
+
+function withCangarWeekDefault(query: Request["query"]) {
+  return {
+    ...query,
+    week: query.week ?? currentIsoWeek(),
+  };
+}
+
+function withCangarMonthDefault(query: Request["query"]) {
+  return {
+    ...query,
+    month: query.month ?? currentMonth(),
+  };
+}
+
+export function queryStringFromObject(query: Request["query"], defaults?: Record<string, string>) {
   const params = new URLSearchParams(defaults);
 
   for (const [key, value] of Object.entries(query)) {
@@ -182,11 +215,18 @@ export async function getKeuanganRekap(query: Request["query"]) {
   return result.response;
 }
 
+export async function getCangarDashboardPath(path: string, query: Request["query"]) {
+  const result = await requestCangar(path, {
+    queryString: queryStringFromObject(query),
+  });
+  return result.response;
+}
+
 export async function getDashboardSummary(query: Request["query"]) {
   const summary = await getSummary();
-  const stok = await getStok({ ...query, week: query.week ?? "2026-W20" });
+  const stok = await getStok(withCangarWeekDefault(query));
   const booking = await getBooking(query);
-  const keuangan = await getKeuanganRekap({ ...query, month: query.month ?? "2026-05" });
+  const keuangan = await getKeuanganRekap(withCangarMonthDefault(query));
 
   return {
     summary,
@@ -199,9 +239,9 @@ export async function getDashboardSummary(query: Request["query"]) {
 export async function getExecutiveDashboardSummary(query: Request["query"]) {
   const [summaryResult, stokResult, bookingResult, keuanganResult] = await Promise.allSettled([
     getSummary(),
-    getStok({ ...query, week: query.week ?? "2026-W20" }),
+    getStok(withCangarWeekDefault(query)),
     getBooking(query),
-    getKeuanganRekap({ ...query, month: query.month ?? "2026-05" }),
+    getKeuanganRekap(withCangarMonthDefault(query)),
   ]);
 
   const summary = summaryResult.status === "fulfilled" ? summaryResult.value : null;

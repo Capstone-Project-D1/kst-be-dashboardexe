@@ -5,7 +5,7 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { corsOptions } from "./config/cors.js";
 import { logger } from "./config/logger.js";
-import { errorMiddleware } from "./middlewares/error.middleware.js";
+import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware.js";
 import { globalRateLimit } from "./middlewares/rateLimit.middleware.js";
 import approvalsRoutes from "./modules/approvals/approvals.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
@@ -16,6 +16,7 @@ import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import dataRoutes from "./modules/data/data.routes.js";
 import gatewayRoutes, { kstGatewayRoutes } from "./modules/gateway/gateway.routes.js";
 import healthRoutes from "./modules/health/health.routes.js";
+import jatikertoRoutes from "./modules/jatikerto/jatikerto.routes.js";
 import reportsRoutes from "./modules/reports/reports.routes.js";
 import usersRoutes from "./modules/users/users.routes.js";
 
@@ -34,8 +35,12 @@ export function createApp() {
 
   app.use("/health", healthRoutes);
   app.use("/api/kst/cangar", cangarRoutes);
+  app.use("/api/gateway/cangar", cangarRoutes);
+  app.use("/api/gateway/jatikerto", jatikertoRoutes);
   app.use("/api", gatewayRoutes);
   app.use("/kst/cangar", cangarCompatRoutes);
+  app.use("/kst/cangar", cangarRoutes);
+  app.use("/kst/jatikerto", jatikertoRoutes);
   app.use(kstGatewayRoutes);
   app.use("/auth", authRoutes);
   app.use("/users", usersRoutes);
@@ -45,6 +50,7 @@ export function createApp() {
   app.use("/reports", reportsRoutes);
   app.use(dataRoutes);
 
+  app.use(notFoundMiddleware);
   app.use(errorMiddleware);
 
   return app;

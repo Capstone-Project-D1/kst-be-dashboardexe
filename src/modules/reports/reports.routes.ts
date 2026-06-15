@@ -44,6 +44,7 @@ router.get(
   authMiddleware,
   validate({ query: reportQuerySchema }),
   asyncHandler(async (req, res) => {
+    res.setHeader("X-KST-Data-Source", "local-prisma");
     const query = req.query as z.infer<typeof reportQuerySchema>;
     if (!req.user!.permissions.includes("download_report")) throw new AppError(403, "Akses ditolak.");
     if (req.user!.activeRole === "operator" && !req.user!.kstAccess.includes(query.kst)) {

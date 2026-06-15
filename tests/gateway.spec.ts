@@ -15,6 +15,7 @@ process.env.COOKIE_SAME_SITE = "lax";
 process.env.NGIJO_API_BASE_URL = "http://localhost:5001/api";
 process.env.CANGAR_API_BASE_URL = "http://localhost:5002/api";
 process.env.JATIKERTO_API_BASE_URL = "http://localhost:5000/api";
+process.env.JATIKERTO_JWT_SECRET = "test-access-secret-minimum-16";
 process.env.UPSTREAM_TIMEOUT_MS = "5000";
 
 let app: any;
