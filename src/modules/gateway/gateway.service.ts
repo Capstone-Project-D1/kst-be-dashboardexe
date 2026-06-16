@@ -7,6 +7,7 @@ import { canAccessKst } from "../../utils/rbac.js";
 import { AppError } from "../../utils/response.js";
 import { getCangarDashboardPath, getExecutiveDashboardSummary } from "../cangar/cangarWp.service.js";
 import { getJatikertoDashboardSummary } from "../jatikerto/jatikerto.service.js";
+import { getNgijoDashboardSummary } from "../ngijo/ngijo.service.js";
 import { GatewayError, requestUpstream, type GatewayResult } from "./gateway.client.js";
 import { getUpstreamConfig, KST_IDENTIFIERS } from "./upstream.config.js";
 
@@ -34,6 +35,7 @@ type SourcesMap = Record<string, SourceStatus>;
 
 export function parseKstIdentifier(value: string | string[] | undefined): KstIdentifier {
   const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate === "kst_ngijo") return "ngijo";
   if (candidate === "ngijo" || candidate === "cangar" || candidate === "jatikerto") {
     return candidate;
   }
@@ -59,6 +61,7 @@ function upstreamRoleForUser(user: AuthUser, kstIdentifier: KstIdentifier) {
 function upstreamAuthorization(req: Request, kstIdentifier: KstIdentifier) {
   const authorization = req.header("authorization");
   const upstream = getUpstreamConfig(kstIdentifier);
+  if (upstream.forwardAuthorization === false) return undefined;
   if (!authorization || !upstream.rewriteAuthorization) return authorization;
 
   const user = req.user as GatewayAuthUser;
@@ -250,6 +253,26 @@ async function fetchDashboardSource(req: Request, kstIdentifier: KstIdentifier, 
     } satisfies DashboardSource;
   }
 
+  if (kstIdentifier === "ngijo" && path === "/dashboard/summary") {
+    try {
+      const data = await getNgijoDashboardSummary();
+      return { kstIdentifier, data } satisfies DashboardSource;
+    } catch (error) {
+      const isUnavailable =
+        error instanceof GatewayError && error.code === 503 &&
+        error.message.includes("belum dikonfigurasi");
+      logger.warn({ error, kstIdentifier, path }, "Ngijo dashboard summary aggregation failed");
+      return {
+        kstIdentifier,
+        data: null,
+        warning: isUnavailable
+          ? "Backend KST ngijo belum dikonfigurasi."
+          : "Dashboard KST ngijo: gagal mengagregasi data dari upstream.",
+        unavailable: isUnavailable,
+      } satisfies DashboardSource;
+    }
+  }
+
   // ── Generic upstream pass-through ───────────────────────────────────
   // Check if baseUrl is configured; if not, mark as unavailable
   const upstreamCfg = getUpstreamConfig(kstIdentifier);
@@ -411,8 +434,8 @@ export async function aggregateDashboardSummary(req: Request) {
     greenPerformance: nullableAverage(sources, "greenPerformance"),
 
     totalContracts: contracts.reduce((total, item) => total + item.contract.length, 0),
-    totalMitra: sources.reduce((total, source) => total + numberValue(source, "totalMitra"), 0),
-    totalPartners: sources.reduce((total, source) => total + numberValue(source, "totalPartners"), 0),
+    totalMitra: nullableSum(sources, "totalMitra"),
+    totalPartners: nullableSum(sources, "totalPartners"),
     message: sources.some((source) => source.data) ? undefined : "Data dashboard belum tersedia.",
     sources: sourcesMap,
     warnings,

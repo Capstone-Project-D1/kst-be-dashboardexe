@@ -12,7 +12,7 @@ process.env.REFRESH_TOKEN_TTL_DAYS = "7";
 process.env.CORS_ORIGIN = "http://localhost:5173";
 process.env.COOKIE_SECURE = "false";
 process.env.COOKIE_SAME_SITE = "lax";
-process.env.NGIJO_API_BASE_URL = "http://localhost:5001/api";
+process.env.NGIJO_API_BASE_URL = "https://kst-ngijo.up.railway.app/api/integration";
 process.env.CANGAR_API_BASE_URL = "http://localhost:5002/api";
 process.env.JATIKERTO_API_BASE_URL = "http://localhost:5000/api";
 process.env.JATIKERTO_JWT_SECRET = "test-access-secret-minimum-16";
@@ -141,10 +141,21 @@ describe("KST gateway API", () => {
 
   it("proxies public /kst routes to the selected upstream backend", async () => {
     await request(app)
-      .get("/kst/ngijo/data/tracker-inovasi?limit=5")
+      .get("/kst/ngijo/data/penelitian?limit=5")
       .set("Authorization", `Bearer ${superAdminToken}`);
 
-    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:5001/api/data/tracker-inovasi?limit=5");
+    expect(fetchMock.mock.calls[0][0]).toBe("https://kst-ngijo.up.railway.app/api/integration/data/penelitian/aktif?limit=5");
+    expect((fetchMock.mock.calls[0][1] as any).headers.Authorization).toBeUndefined();
+  });
+
+  it("keeps legacy Ngijo tracker-inovasi table path as a backward-compatible alias", async () => {
+    await request(app)
+      .get("/kst/ngijo/data/tracker-inovasi?offset=0&limit=50")
+      .set("Authorization", `Bearer ${superAdminToken}`);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://kst-ngijo.up.railway.app/api/integration/data/penelitian/aktif?offset=0&limit=50",
+    );
   });
 
   it("forwards query request bodies and Authorization", async () => {
@@ -207,15 +218,14 @@ describe("KST gateway API", () => {
     expect(res.body.error.message).toBe("Token invalid");
   });
 
-  it("returns 404 for unregistered KST services", async () => {
+  it("accepts kst_ngijo as an alias for the Ngijo upstream identifier", async () => {
     const res = await request(app)
       .get("/api/gateway/kst_ngijo/health")
       .set("Authorization", `Bearer ${superAdminToken}`);
 
-    expect(res.status).toBe(404);
-    expect(res.body.response).toBeNull();
-    expect(res.body.error.code).toBe(404);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://kst-ngijo.up.railway.app/api/integration/health");
+    expect((fetchMock.mock.calls[0][1] as any).headers.Authorization).toBeUndefined();
   });
 
   it("returns standard 503 errors when a KST service is unreachable", async () => {
@@ -269,7 +279,7 @@ describe("KST gateway API", () => {
 
     expect(res.status).toBe(200);
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      "http://localhost:5001/api/contract?permission=rw",
+      "https://kst-ngijo.up.railway.app/api/integration/contract?permission=rw",
       "http://localhost:5002/api/contract?permission=rw",
       "http://localhost:5000/api/contract?permission=rw",
     ]);

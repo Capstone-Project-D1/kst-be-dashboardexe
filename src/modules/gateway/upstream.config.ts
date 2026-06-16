@@ -12,6 +12,7 @@ export type UpstreamConfig = {
   jwtIssuer?: string;
   jwtAudience?: string;
   rewriteAuthorization?: boolean;
+  forwardAuthorization?: boolean;
 };
 
 export const upstreamTimeoutMs = env.UPSTREAM_TIMEOUT_MS;
@@ -19,9 +20,10 @@ export const upstreamTimeoutMs = env.UPSTREAM_TIMEOUT_MS;
 export const upstreamServices: Record<KstIdentifier, UpstreamConfig> = {
   ngijo: {
     kstIdentifier: "ngijo",
-    upstreamIdentifier: "ngijo",
+    upstreamIdentifier: "kst_ngijo",
     envName: "NGIJO_API_BASE_URL",
     baseUrl: env.NGIJO_API_BASE_URL || null,
+    forwardAuthorization: false,
   },
   cangar: {
     kstIdentifier: "cangar",
