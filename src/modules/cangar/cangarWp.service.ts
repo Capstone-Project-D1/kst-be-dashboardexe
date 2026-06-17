@@ -103,6 +103,10 @@ function firstAvailableNumber(...values: Array<number | null>) {
   return values.find((value): value is number => value !== null) ?? 0;
 }
 
+function firstAvailableNullableNumber(...values: Array<number | null>) {
+  return values.find((value): value is number => value !== null) ?? null;
+}
+
 function sumItemNumbers(items: unknown[], keys: string[], paths: string[][] = []): number {
   return items.reduce<number>((total, item) => total + (firstNumber(item, keys, paths) ?? 0), 0);
 }
@@ -409,7 +413,7 @@ export async function getExecutiveDashboardSummary(query: Request["query"]) {
       ]),
       guestCount > 0 ? guestCount : bookingCount,
     ),
-    todayVisitors: firstAvailableNumber(
+    todayVisitors: firstAvailableNullableNumber(
       firstNumberFrom(
         summarySources,
         ["todayVisitors", "today_visitors", "pengunjung_hari_ini", "booking_today"],
@@ -422,7 +426,7 @@ export async function getExecutiveDashboardSummary(query: Request["query"]) {
         "booking_today",
       ]),
     ),
-    weekVisitors: firstAvailableNumber(
+    weekVisitors: firstAvailableNullableNumber(
       firstNumberFrom(summarySources, [
         "weekVisitors",
         "week_visitors",

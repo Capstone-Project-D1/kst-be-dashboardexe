@@ -226,6 +226,44 @@ describe("Cangar WordPress gateway", () => {
     );
   });
 
+  it("keeps visitor day and week values null when Cangar does not provide those fields", async () => {
+    const week = currentIsoWeek();
+    const month = currentMonth();
+    fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/auth/login"))
+        return jsonResponse({ response: { accessToken: "wp-token" } });
+      if (url.endsWith("/data/summary")) {
+        return jsonResponse({
+          response: {
+            total_pengunjung: 12,
+          },
+        });
+      }
+      if (url.endsWith(`/data/stok?week=${week}`)) {
+        return jsonResponse({ response: { items: [] } });
+      }
+      if (url.endsWith("/data/booking")) {
+        return jsonResponse({ response: { bookings: [] } });
+      }
+      if (url.endsWith(`/data/keuangan/rekap?month=${month}`)) {
+        return jsonResponse({ response: {} });
+      }
+      return jsonResponse({ error: { message: "Unexpected URL" } }, 500);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(app)
+      .get("/dashboard/summary")
+      .set("Authorization", `Bearer ${superAdminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.response).toMatchObject({
+      totalVisitors: 12,
+      todayVisitors: null,
+      weekVisitors: null,
+    });
+  });
+
   it("keeps GET /dashboard/summary successful when Cangar WordPress fails", async () => {
     fetchMock = vi.fn(async () => jsonResponse({ error: { message: "Cangar unavailable" } }, 503));
     vi.stubGlobal("fetch", fetchMock);
